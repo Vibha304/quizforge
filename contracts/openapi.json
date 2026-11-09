@@ -1,0 +1,985 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "QuizForge API",
+    "description": "Gamified AI-Based Syllabus-to-Quiz Learning System. Upload PDFs/DOCX, extract topics, generate questions with LLMs, and play adaptive quizzes with BKT mastery tracking.",
+    "version": "0.1.0",
+    "contact": {
+      "name": "QuizForge Team",
+      "email": "dev@quizforge.app"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "operationId": "health_check",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {"type": "string", "example": "ok"},
+                    "version": {"type": "string", "example": "0.1.0"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "operationId": "auth_register",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/RegisterRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TokenResponse"}
+              }
+            }
+          },
+          "400": {
+            "description": "Email already registered or validation error",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login with email and password",
+        "operationId": "auth_login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/LoginRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TokenResponse"}
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user",
+        "operationId": "auth_me",
+        "responses": {
+          "200": {
+            "description": "Current user info",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/UserResponse"}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/documents": {
+      "post": {
+        "tags": ["Documents"],
+        "summary": "Upload a document (PDF or DOCX)",
+        "operationId": "documents_upload",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF or DOCX file, max 20MB"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Document accepted for processing",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/DocumentResponse"}
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file type or size"
+          },
+          "413": {
+            "description": "File too large"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Documents"],
+        "summary": "List all documents for current user",
+        "operationId": "documents_list",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "schema": {"type": "integer", "default": 0}
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 20, "maximum": 100}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of documents",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/DocumentListResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Get document details",
+        "operationId": "documents_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document details",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/DocumentResponse"}
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/topics": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Get topic tree for a document",
+        "operationId": "documents_get_topics",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Topic tree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/TopicTree"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/progress": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Stream processing progress (SSE)",
+        "operationId": "documents_progress_stream",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream of ProgressEvent objects",
+            "content": {
+              "text/event-stream": {
+                "schema": {"$ref": "#/components/schemas/ProgressEvent"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topics/{topic_id}": {
+      "patch": {
+        "tags": ["Topics"],
+        "summary": "Update a topic (name, keywords, difficulty)",
+        "operationId": "topics_update",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/TopicUpdate"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated topic",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TopicResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topics/{topic_id}/generate": {
+      "post": {
+        "tags": ["Topics"],
+        "summary": "Generate questions for a specific topic",
+        "operationId": "topics_generate",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "count": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
+                  "difficulty": {
+                    "type": "string",
+                    "enum": ["easy", "medium", "hard", "mixed"],
+                    "default": "mixed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated questions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "generated": {"type": "integer"},
+                    "questions": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/QuestionResponse"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/questions": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "List questions with filters",
+        "operationId": "questions_list",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          },
+          {
+            "name": "difficulty",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["easy", "medium", "hard"]}
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["mcq", "true_false", "short_answer"]}
+          },
+          {
+            "name": "bloom",
+            "in": "query",
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["active", "draft", "archived"]}
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "schema": {"type": "integer", "default": 0}
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 50, "maximum": 200}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Question list",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/QuestionListResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz/start": {
+      "post": {
+        "tags": ["Quiz"],
+        "summary": "Start a new quiz session",
+        "operationId": "quiz_start",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/QuizStartRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Quiz session created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/QuizSessionResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz/{session_id}": {
+      "get": {
+        "tags": ["Quiz"],
+        "summary": "Get quiz session details",
+        "operationId": "quiz_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quiz session",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/QuizSessionResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz/{session_id}/answer": {
+      "post": {
+        "tags": ["Quiz"],
+        "summary": "Submit an answer to the current question",
+        "operationId": "quiz_answer",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/AnswerRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer result with BKT update, XP, badges",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/AnswerResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/mastery": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get mastery levels per topic",
+        "operationId": "analytics_mastery",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mastery data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/MasteryResponse"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/progress": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get XP and progress over time",
+        "operationId": "analytics_progress",
+        "responses": {
+          "200": {
+            "description": "Progress data",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ProgressResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/coverage": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Get question coverage per topic",
+        "operationId": "analytics_coverage",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coverage data",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CoverageResponse"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leaderboard": {
+      "get": {
+        "tags": ["Leaderboard"],
+        "summary": "Get weekly leaderboard",
+        "operationId": "leaderboard_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer", "default": 10, "maximum": 50}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leaderboard entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/LeaderboardEntry"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/export/questions": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Export questions in various formats",
+        "operationId": "export_questions",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["csv", "json", "docx"], "default": "json"}
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          },
+          {
+            "name": "topic_id",
+            "in": "query",
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exported file",
+            "content": {
+              "application/json": {},
+              "text/csv": {},
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "name"],
+        "properties": {
+          "email": {"type": "string", "format": "email"},
+          "password": {"type": "string", "minLength": 8},
+          "name": {"type": "string", "minLength": 2},
+          "role": {"type": "string", "enum": ["student", "faculty"], "default": "student"}
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {"type": "string", "format": "email"},
+          "password": {"type": "string"}
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {"type": "string"},
+          "token_type": {"type": "string", "example": "bearer"},
+          "user": {"$ref": "#/components/schemas/UserResponse"}
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "email": {"type": "string"},
+          "name": {"type": "string"},
+          "role": {"type": "string", "enum": ["student", "faculty"]},
+          "created_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": {"type": "string"}
+        }
+      },
+      "DocumentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "filename": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["pending", "parsing", "extracting_topics", "generating", "ready", "error"]
+          },
+          "topic_count": {"type": "integer"},
+          "question_count": {"type": "integer"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "error_message": {"type": "string", "nullable": true}
+        }
+      },
+      "DocumentListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/DocumentResponse"}
+          },
+          "total": {"type": "integer"},
+          "skip": {"type": "integer"},
+          "limit": {"type": "integer"}
+        }
+      },
+      "ProgressEvent": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": ["parsing", "extracting_topics", "generating_questions", "done", "error"]
+          },
+          "message": {"type": "string"},
+          "progress": {"type": "number", "minimum": 0, "maximum": 100},
+          "detail": {"type": "object", "nullable": true}
+        }
+      },
+      "TopicResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "document_id": {"type": "integer"},
+          "parent_id": {"type": "integer", "nullable": true},
+          "name": {"type": "string"},
+          "keywords": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "summary": {"type": "string", "nullable": true},
+          "difficulty_prior": {"type": "number", "minimum": 0, "maximum": 1},
+          "question_count": {"type": "integer"}
+        }
+      },
+      "TopicUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "keywords": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "difficulty_prior": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "TopicTree": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "keywords": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "difficulty_prior": {"type": "number"},
+          "question_count": {"type": "integer"},
+          "children": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/TopicTree"}
+          }
+        }
+      },
+      "QuestionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "topic_id": {"type": "integer"},
+          "topic_name": {"type": "string"},
+          "type": {"type": "string", "enum": ["mcq", "true_false", "short_answer"]},
+          "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+          "bloom": {"type": "string"},
+          "stem": {"type": "string"},
+          "options": {
+            "type": "array",
+            "items": {"type": "string"},
+            "nullable": true
+          },
+          "answer": {"type": "string"},
+          "explanation": {"type": "string"},
+          "source_snippet": {"type": "string", "nullable": true},
+          "status": {"type": "string", "enum": ["active", "draft", "archived"]}
+        }
+      },
+      "QuestionListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/QuestionResponse"}
+          },
+          "total": {"type": "integer"},
+          "skip": {"type": "integer"},
+          "limit": {"type": "integer"}
+        }
+      },
+      "QuizStartRequest": {
+        "type": "object",
+        "properties": {
+          "document_id": {"type": "integer"},
+          "topic_ids": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "Optional: restrict to specific topics"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["adaptive", "sequential", "random", "weak_focus"],
+            "default": "adaptive"
+          },
+          "max_questions": {"type": "integer", "default": 20}
+        },
+        "required": ["document_id"]
+      },
+      "QuizSessionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "mode": {"type": "string"},
+          "status": {"type": "string", "enum": ["active", "completed"]},
+          "score": {"type": "number"},
+          "xp_earned": {"type": "integer"},
+          "current_question": {"$ref": "#/components/schemas/QuestionResponse"},
+          "why_text": {"type": "string"},
+          "attempt_count": {"type": "integer"},
+          "correct_count": {"type": "integer"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "completed_at": {"type": "string", "format": "date-time", "nullable": true}
+        }
+      },
+      "AnswerRequest": {
+        "type": "object",
+        "required": ["question_id", "answer"],
+        "properties": {
+          "question_id": {"type": "integer"},
+          "answer": {"type": "string"},
+          "response_ms": {"type": "integer", "description": "Time taken to answer in milliseconds"}
+        }
+      },
+      "AnswerResponse": {
+        "type": "object",
+        "properties": {
+          "correct": {"type": "boolean"},
+          "correct_answer": {"type": "string"},
+          "explanation": {"type": "string"},
+          "xp_gained": {"type": "integer"},
+          "new_xp_total": {"type": "integer"},
+          "new_level": {"type": "integer"},
+          "mastery_delta": {"type": "number"},
+          "new_mastery": {"type": "number"},
+          "badges_unlocked": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/BadgeResponse"}
+          },
+          "streak": {"type": "integer"},
+          "combo": {"type": "integer"},
+          "next_question": {"$ref": "#/components/schemas/QuestionResponse"},
+          "why_text": {"type": "string"},
+          "session_complete": {"type": "boolean"}
+        }
+      },
+      "MasteryResponse": {
+        "type": "object",
+        "properties": {
+          "topic_id": {"type": "integer"},
+          "topic_name": {"type": "string"},
+          "p_L": {"type": "number", "description": "BKT mastery probability [0,1]"},
+          "attempts_count": {"type": "integer"},
+          "is_weak": {"type": "boolean"},
+          "is_mastered": {"type": "boolean"},
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ts": {"type": "string", "format": "date-time"},
+                "p_L": {"type": "number"},
+                "correct": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      },
+      "ProgressResponse": {
+        "type": "object",
+        "properties": {
+          "xp": {"type": "integer"},
+          "level": {"type": "integer"},
+          "xp_to_next_level": {"type": "integer"},
+          "streak": {"type": "integer"},
+          "total_attempts": {"type": "integer"},
+          "correct_attempts": {"type": "integer"},
+          "accuracy": {"type": "number"},
+          "xp_history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {"type": "string", "format": "date"},
+                "xp": {"type": "integer"}
+              }
+            }
+          }
+        }
+      },
+      "CoverageResponse": {
+        "type": "object",
+        "properties": {
+          "total_topics": {"type": "integer"},
+          "covered_topics": {"type": "integer"},
+          "total_questions": {"type": "integer"},
+          "by_topic": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "topic_id": {"type": "integer"},
+                "topic_name": {"type": "string"},
+                "question_count": {"type": "integer"},
+                "by_difficulty": {
+                  "type": "object",
+                  "properties": {
+                    "easy": {"type": "integer"},
+                    "medium": {"type": "integer"},
+                    "hard": {"type": "integer"}
+                  }
+                },
+                "by_bloom": {
+                  "type": "object",
+                  "additionalProperties": {"type": "integer"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "UserStatsResponse": {
+        "type": "object",
+        "properties": {
+          "xp": {"type": "integer"},
+          "level": {"type": "integer"},
+          "streak": {"type": "integer"},
+          "last_active": {"type": "string", "format": "date-time"},
+          "badges": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/BadgeResponse"}
+          }
+        }
+      },
+      "BadgeResponse": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "icon": {"type": "string"},
+          "earned_at": {"type": "string", "format": "date-time", "nullable": true}
+        }
+      },
+      "LeaderboardEntry": {
+        "type": "object",
+        "properties": {
+          "rank": {"type": "integer"},
+          "user_id": {"type": "integer"},
+          "name": {"type": "string"},
+          "xp": {"type": "integer"},
+          "level": {"type": "integer"},
+          "streak": {"type": "integer"},
+          "badge_count": {"type": "integer"}
+        }
+      }
+    }
+  }
+}
